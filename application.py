@@ -23,6 +23,7 @@ def after_request(response):
     response.headers["Pragma"] = "no-cache"
     return response
 
+
 # Custom filter
 app.jinja_env.filters["usd"] = usd
 
@@ -44,6 +45,8 @@ if not os.environ.get("API_KEY"):
 @login_required
 def index():
     """Show portfolio of stocks"""
+    
+    
     return apology("TODO")
 
 
@@ -51,7 +54,65 @@ def index():
 @login_required
 def buy():
     """Buy shares of stock"""
-    return apology("TODO")
+    # User reached route via POST (as by submitting a form via POST)
+    if request.method == "POST":
+
+        # Call the function lookup to check if it's a valid symbol
+        quote = lookup(request.form.get("symbol"))
+
+        # Gets stocks symbol, stocks current price and how many shares he wants to buy
+        stock_symbol = quote["symbol"]
+        current_price = quote["price"]
+        shares = int(request.form.get("shares"))
+
+        # If the user don't type anything on the "symbol" field
+        if not request.form.get("symbol"):
+            return apology("Stock Symbol invalid.")
+
+        # If the users type in a symbol that don't exist
+        elif quote == None:
+            return apology("Stock Symbol doesn't exist.")
+
+        # If the user don't type anything on the "shares" field
+        if not request.form.get("shares"):
+            return apology("You must type a number of shares that you want buy.")
+
+        # If the user don't type a non positive number
+        elif shares < 1:
+            return apology("The value must be equal or superior to 1")
+
+        # Gets user's current amount of cash
+        users_cash = db.execute(
+            "SELECT cash FROM users WHERE id = ?", session["user_id"]
+        )
+
+        # Do the calcul of the current price of stoks * the shares the user wants to buy
+        total = current_price * shares
+
+        # If the user doesn't have enoigh cash to buy it, return an error
+        if total > users_cash[0]["cash"]:
+            return apology("You don't have enough cash to buy it.")
+
+        else:
+            # Subtract user's cash with the price of the shares and store it into a variable
+            new_cash = users_cash[0]["cash"] - total
+            # Query the database to update users current amount of cash
+            db.execute(
+                "UPDATE users SET cash = ? WHERE id = ?", new_cash, session["user_id"],
+            )
+            # Insert into the table "wallet" the number of stocks the user bought, its symbol, price and time
+            db.execute(
+                "INSERT INTO wallet (user_id, symbol, shares, price, time) VALUES (?, ?, ?, ?, datetime('now', 'localtime'))",
+                session["user_id"],
+                stock_symbol,
+                shares,
+                total,
+            )
+            return redirect("/buy")
+
+    # User reached route via GET (as by clicking a link or via redirect)
+    else:
+        return render_template("buy.html")
 
 
 @app.route("/history")
@@ -80,8 +141,9 @@ def login():
             return apology("must provide password", 403)
 
         # Query database for username
-        rows = db.execute("SELECT * FROM users WHERE username = :username",
-                          username=request.form.get("username"))
+        rows = db.execute(
+            "SELECT * FROM users WHERE username = ?", request.form.get("username")
+        )
 
         # Ensure username exists and password is correct
         if len(rows) != 1 or not check_password_hash(rows[0]["hash"], request.form.get("password")):
@@ -127,10 +189,10 @@ def quote():
         # If users gave a valid symbol
         else:
             # Call the usd function price to transform the price in US Dollars and store it into 'value'
-            value = usd(quote['price'])
+            value = usd(quote["price"])
             # Render the template to print to the user the informations about the quote
             return render_template(
-                "quoted.html", name=quote['name'], symbol=quote['symbol'], price=value
+                "quoted.html", name=quote["name"], symbol=quote["symbol"], price=value
             )
 
     # Request method = GET
@@ -152,8 +214,7 @@ def register():
         # Check if there isn't other identical username on the database
         # the result will be stored in roll
         rows = db.execute(
-            "SELECT * FROM users WHERE username = :name",
-            name=request.form.get("username"),
+            "SELECT * FROM users WHERE username = ?", request.form.get("username"),
         )
         # If the len of the row is equal to 0, that means the username the user gave is unique
         # otherwise, if the len is equal to 1, that means the username already exists on the database
@@ -180,9 +241,9 @@ def register():
 
             # Store usersname and password into database
             new_user = db.execute(
-                "INSERT INTO users (username, hash) VALUES (:name, :pass_hash)",
-                name=request.form.get("username"),
-                pass_hash=pass_hash,
+                "INSERT INTO users (username, hash) VALUES (?, ?)",
+                request.form.get("username"),
+                pass_hash,
             )
 
             # Start a session for the user after register
