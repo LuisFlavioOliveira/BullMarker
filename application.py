@@ -45,9 +45,37 @@ if not os.environ.get("API_KEY"):
 @login_required
 def index():
     """Show portfolio of stocks"""
-    
-    
-    return apology("TODO")
+
+    # Get user's current amount of cash
+    users = db.execute(
+        "SELECT cash FROM users WHERE id = :user_id", user_id=session["user_id"]
+    )
+    # Get the information from the user's wallet. Db.execute returns a list of dictionaries.
+    stocks = db.execute(
+        "SELECT symbol, name, SUM(shares) as total_shares FROM wallet WHERE user_id = ? GROUP BY symbol HAVING total_shares > 0",
+        session["user_id"],
+    )
+
+    # Create a dictionary where the keys are the stocks symbols and the values are the dictionary
+    # that function lookup returns (i.e. {'AAPL': {'name': 'Apple, Inc.', 'price': 307.71, 'symbol': 'AAPL'} )
+    quotes = {}
+
+    # Call the lookup function and populate the dictionary with the informations about the stocks
+    # and to get the total value of all the stocks price * shares
+    total_stocks = 0
+    for stock in stocks:
+        quotes[stock["symbol"]] = lookup(stock["symbol"])
+        total_stocks += quotes[stock["symbol"]]["price"] * stock["total_shares"]
+
+    # Store in a variable the remaining amount of cash that the user has
+    total = users[0]["cash"]
+
+    # Calculate the total of cash that users has counting stocks + cash in the wallet
+    total_cash = total_stocks + total
+
+    return render_template(
+        "index.html", quotes=quotes, stocks=stocks, total=total, total_cash=total_cash
+    )
 
 
 @app.route("/buy", methods=["GET", "POST"])
@@ -64,6 +92,7 @@ def buy():
         stock_symbol = quote["symbol"]
         current_price = quote["price"]
         shares = int(request.form.get("shares"))
+        company_name = quote["name"]
 
         # If the user don't type anything on the "symbol" field
         if not request.form.get("symbol"):
@@ -102,13 +131,18 @@ def buy():
             )
             # Insert into the table "wallet" the number of stocks the user bought, its symbol, price and time
             db.execute(
-                "INSERT INTO wallet (user_id, symbol, shares, price, time) VALUES (?, ?, ?, ?, datetime('now', 'localtime'))",
+                "INSERT INTO wallet (user_id, symbol, name, shares, price, time) VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))",
                 session["user_id"],
                 stock_symbol,
+                company_name,
                 shares,
                 total,
             )
-            return redirect("/buy")
+
+            # Display a flash message that the user just bought
+            flash("Bought!")
+
+            return redirect("/")
 
     # User reached route via GET (as by clicking a link or via redirect)
     else:
@@ -119,6 +153,9 @@ def buy():
 @login_required
 def history():
     """Show history of transactions"""
+    
+    
+    
     return apology("TODO")
 
 
@@ -146,7 +183,9 @@ def login():
         )
 
         # Ensure username exists and password is correct
-        if len(rows) != 1 or not check_password_hash(rows[0]["hash"], request.form.get("password")):
+        if len(rows) != 1 or not check_password_hash(
+            rows[0]["hash"], request.form.get("password")
+        ):
             return apology("invalid username and/or password", 403)
 
         # Remember which user has logged in
@@ -263,7 +302,77 @@ def register():
 @login_required
 def sell():
     """Sell shares of stock"""
-    return apology("TODO")
+
+    # User reached route via POST (as by submitting a form via POST)
+    if request.method == "POST":
+
+        # Call the lookup function to get the current information about the selected stock
+        quote = lookup(request.form.get("symbol"))
+
+        # If the user doesn't select a number of shares to sell
+        if not request.form.get("shares"):
+            return apology("You must select a number of stocks to sell.")
+
+        # Store shares quantity input in a variable
+        shares = int(request.form.get("shares"))
+
+        # if the user gives a non positive number of shares
+        if shares <= 0:
+            return apology("You can't sell 0 or less stocks.")
+
+        # Check how many of the selected stock the user has on his/her wallet
+        stocks_amount = db.execute(
+            "SELECT SUM(shares) as total_shares FROM wallet WHERE user_id = ? AND symbol = ? GROUP BY symbol",
+            session["user_id"],
+            request.form.get("symbol"),
+        )
+
+        # If the user doesn't own the amount he wants to sell
+        if stocks_amount[0]["total_shares"] < int(request.form.get("shares")):
+            return apology("You don't have the amount of shares that you want to sell.")
+
+        # User gave valid inputs
+        else:
+
+            # Get the amount the user will receive for the sell
+            new_cash = quote["price"] * shares
+
+            # Query the database to update users current amount of cash
+            db.execute(
+                "UPDATE users SET cash = cash + ? WHERE id = ?",
+                new_cash,
+                session["user_id"],
+            )
+            # Update the table "wallet" the number of stocks the user has after the sell
+            db.execute(
+                "UPDATE wallet SET shares = shares - ? WHERE user_id = ? AND symbol = ?",
+                shares,
+                session["user_id"],
+                request.form.get("symbol"),
+            )
+            
+            # Update the table "transactions"
+            db.execute(
+                "INSERT INTO transactions UPDATE transactions SET shares = shares - ? WHERE user_id = ? AND symbol = ?",
+                shares,
+                session["user_id"],
+                request.form.get("symbol"),
+            )
+
+            # Display a flash message that the user just sold
+            flash("Sold!")
+
+            return redirect("/")
+
+    # Request method = GET
+    else:
+        # Query to get the user's wallet information
+        stocks = db.execute(
+            "SELECT symbol, SUM(shares) as total_shares FROM wallet WHERE user_id = ? GROUP BY symbol HAVING total_shares > 0",
+            session["user_id"],
+        )
+
+        return render_template("sell.html", stocks=stocks)
 
 
 def errorhandler(e):
