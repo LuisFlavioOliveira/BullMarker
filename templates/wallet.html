@@ -1,0 +1,89 @@
+{% extends "layout.html" %}
+
+{% block title %}
+Portfolio
+{% endblock %}
+
+{% block main %}
+<h1>Portfolio</h1>
+<table class="table table-striped table-dark" style="text-align: left;">
+    <thead>
+        <tr>
+            <th>Symbol</th>
+            <th>Name</th>
+            <th>Shares</th>
+            <th>Price</th>
+            <th>Actions</th>
+            <th>TOTAL</th>
+        </tr>
+    </thead>
+
+    <tfoot>
+        <tr>
+            <td colspan="4"></td>
+            <td style="font-weight: bold; text-align: right; position: relative; left: 100px">{{ total_cash | usd }}
+            </td>
+        </tr>
+    </tfoot>
+
+    <tbody>
+        {% for stock in stocks %}
+        <tr>
+            <td>{{ stock.symbol }}</td>
+            <td>{{ stock.name }}</td>
+            <td>{{ stock.total_shares }}</td>
+            <td>{{ quotes[stock.symbol]["price"] | usd }}</td>
+            <td>
+                <form action="/buy" method="post">
+                    <input type="hidden" name="symbol" value="{{ stock.symbol }}" />
+                    <input type="number" name="shares" min="1" placeholder="0" style="width: 50px" required />
+                    <button class="btn btn-sm btn-primary" type="submit">Buy</button>
+                </form>
+
+                <form action="/sell" method="post">
+                    <input type="hidden" name="symbol" value="{{ stock.symbol }}" />
+                    <input type="number" name="shares" min="1" placeholder="0" style="width: 50px" required />
+                    <button class="btn btn-sm btn-danger" type="submit">Sell</button>
+                </form>
+            </td>
+            <td>{{ (quotes[stock.symbol]["price"] * stock.total_shares) | usd }}</td>
+        </tr>
+        {% endfor %}
+        <tr>
+            <td colspan="5">CASH</td>
+            <td>{{ total | usd }}</td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- TradingView Widget BEGIN -->
+<h2>Real-time Information</h2>
+<h3>Insert the stock symbol in the upper right field</h3>
+<div class="tradingview-widget-container">
+    <div id="tradingview_0f102"></div>
+    <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/symbols/NASDAQ-AAPL/" rel="noopener"
+            target="_blank"><span class="blue-text">Stocks Chart</span></a> by TradingView</div>
+    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+    <script type="text/javascript">
+        new TradingView.widget({
+            "autosize": true,
+            "symbol": "NASDAQ:AAPL",
+            "interval": "D",
+            "timezone": "Etc/UTC",
+            "theme": "dark",
+            "style": "3",
+            "locale": "en",
+            "toolbar_bg": "#f1f3f6",
+            "enable_publishing": false,
+            "allow_symbol_change": true,
+            "details": true,
+            "news": [
+                "headlines"
+            ],
+            "container_id": "tradingview_0f102"
+        });
+    </script>
+</div>
+<!-- TradingView Widget END -->
+
+{% endblock %}

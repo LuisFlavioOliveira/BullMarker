@@ -50,6 +50,7 @@ def index():
     users = db.execute(
         "SELECT cash FROM users WHERE id = :user_id", user_id=session["user_id"]
     )
+
     # Get the information from the user's wallet. Db.execute returns a list of dictionaries.
     stocks = db.execute(
         "SELECT symbol, name, SUM(shares) as total_shares FROM wallet WHERE user_id = ? GROUP BY symbol HAVING total_shares > 0",
@@ -74,7 +75,7 @@ def index():
     total_cash = total_stocks + total
 
     return render_template(
-        "index.html", quotes=quotes, stocks=stocks, total=total, total_cash=total_cash
+        "wallet.html", quotes=quotes, stocks=stocks, total=total, total_cash=total_cash,
     )
 
 
@@ -88,27 +89,16 @@ def buy():
         # Call the function lookup to check if it's a valid symbol
         quote = lookup(request.form.get("symbol"))
 
-        # Gets stocks symbol, stocks current price and how many shares he wants to buy
+        # If the users type in a symbol that don't exist
+        if quote == None:
+            flash("Stock Symbol doesn't exist.", "error")
+            return render_template("buy.html")
+
+        # Gets stocks symbol, stocks current price, how many shares he wants to buy and company name
         stock_symbol = quote["symbol"]
         current_price = quote["price"]
         shares = int(request.form.get("shares"))
         company_name = quote["name"]
-
-        # If the user don't type anything on the "symbol" field
-        if not request.form.get("symbol"):
-            return apology("Stock Symbol invalid.")
-
-        # If the users type in a symbol that don't exist
-        elif quote == None:
-            return apology("Stock Symbol doesn't exist.")
-
-        # If the user don't type anything on the "shares" field
-        if not request.form.get("shares"):
-            return apology("You must type a number of shares that you want buy.")
-
-        # If the user don't type a non positive number
-        elif shares < 1:
-            return apology("The value must be equal or superior to 1")
 
         # Gets user's current amount of cash
         users_cash = db.execute(
@@ -118,9 +108,10 @@ def buy():
         # Do the calcul of the current price of stoks * the shares the user wants to buy
         total = current_price * shares
 
-        # If the user doesn't have enoigh cash to buy it, return an error
+        # If the user doesn't have enough cash to buy it, return an error
         if total > users_cash[0]["cash"]:
-            return apology("You don't have enough cash to buy it.")
+            flash("You don't have enough cash to buy it.")
+            return render_template("buy.html")
 
         else:
             # Subtract user's cash with the price of the shares and store it into a variable
@@ -139,6 +130,17 @@ def buy():
                 total,
             )
 
+            # Update the table "transactions"
+            db.execute(
+                "INSERT INTO transactions (user_id, symbol, shares, price_per_share, price, status, time) VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))",
+                session["user_id"],
+                stock_symbol,
+                shares,
+                current_price,
+                total,
+                "BOUGHT",
+            )
+
             # Display a flash message that the user just bought
             flash("Bought!")
 
@@ -153,10 +155,14 @@ def buy():
 @login_required
 def history():
     """Show history of transactions"""
-    
-    
-    
-    return apology("TODO")
+
+    # Get information about stocks that the transactions
+    transactions = db.execute(
+        "SELECT symbol, shares, price_per_share, price, time FROM transactions WHERE user_id = ?",
+        session["user_id"],
+    )
+
+    return render_template("history.html", transactions=transactions)
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -169,14 +175,6 @@ def login():
     # User reached route via POST (as by submitting a form via POST)
     if request.method == "POST":
 
-        # Ensure username was submitted
-        if not request.form.get("username"):
-            return apology("must provide username", 403)
-
-        # Ensure password was submitted
-        elif not request.form.get("password"):
-            return apology("must provide password", 403)
-
         # Query database for username
         rows = db.execute(
             "SELECT * FROM users WHERE username = ?", request.form.get("username")
@@ -186,7 +184,8 @@ def login():
         if len(rows) != 1 or not check_password_hash(
             rows[0]["hash"], request.form.get("password")
         ):
-            return apology("invalid username and/or password", 403)
+            flash("Invalid username and/or password.")
+            return render_template("login.html")
 
         # Remember which user has logged in
         session["user_id"] = rows[0]["id"]
@@ -199,6 +198,61 @@ def login():
         return render_template("login.html")
 
 
+@app.route("/change", methods=["GET", "POST"])
+def change_password():
+    """Allows user to change password"""
+
+    # Forget any user_id
+    session.clear()
+
+    # User reached route via POST (as by submitting a form via POST)
+    if request.method == "POST":
+
+        # If password and confirmation don't match, accuse error
+        if request.form.get("new_password") != request.form.get("new_confirmation"):
+            flash("The New Password and the Confirmation don't match. Try again.")
+            return render_template("change.html")
+
+        else:
+
+            # Query database for username
+            rows = db.execute(
+                "SELECT * FROM users WHERE username = ?", request.form.get("username")
+            )
+
+            # Ensure username exists and password is correct
+            if len(rows) != 1 or not check_password_hash(
+                rows[0]["hash"], request.form.get("old_password")
+            ):
+                flash("Invalid username and/or password.")
+                return render_template("change.html")
+
+            else:
+
+                # Hashes new password before storying it into the database
+                pass_hash = generate_password_hash(
+                    request.form.get("new_password"),
+                    method="pbkdf2:sha256",
+                    salt_length=8,
+                )
+
+                # Store usersname and password into database
+                db.execute(
+                    "UPDATE users SET hash = ? WHERE username = ?",
+                    pass_hash,
+                    request.form.get("username"),
+                )
+
+                # Display a flash message that the password was changed
+                flash("Password changed!")
+
+                return render_template("change.html")
+
+    # Request method = GET
+    else:
+        return render_template("change.html")
+
+
 @app.route("/logout")
 def logout():
     """Log user out"""
@@ -207,7 +261,7 @@ def logout():
     session.clear()
 
     # Redirect user to login form
-    return redirect("/")
+    return render_template("index.html")
 
 
 @app.route("/quote", methods=["GET", "POST"])
@@ -223,7 +277,8 @@ def quote():
 
         # If users tap an invalid symbol, return an error message
         if quote == None:
-            return apology("invalid symbol", 403)
+            flash("This symbol doesn't exist. Please tap a valid stock symbol.")
+            return redirect("/quote")
 
         # If users gave a valid symbol
         else:
@@ -246,10 +301,6 @@ def register():
     # User reached route via POST (as by submitting a form via POST)
     if request.method == "POST":
 
-        # if not username provided, return error
-        if not request.form.get("username"):
-            return apology("must provide a name for register", 403)
-
         # Check if there isn't other identical username on the database
         # the result will be stored in roll
         rows = db.execute(
@@ -258,19 +309,15 @@ def register():
         # If the len of the row is equal to 0, that means the username the user gave is unique
         # otherwise, if the len is equal to 1, that means the username already exists on the database
         if len(rows) == 1:
-            return apology("username already taken, try another one!", 403)
-
-        # Ensure user typed a password
-        if not request.form.get("password"):
-            return apology("you must provid a valid password.", 403)
-
-        # Ensure user typed the confirmation of the password
-        if not request.form.get("confirmation"):
-            return apology("you must confirm your password.", 403)
+            flash(
+                "There is already an user with that username. Please select another one."
+            )
+            return redirect("/register")
 
         # If password and confirmation don't match, accuse error
         if request.form.get("password") != request.form.get("confirmation"):
-            return apology("the passwords don't match. Try again", 403)
+            flash("Password anc Confirmation don't match. Try again.")
+            return redirect("/register")
 
         else:
             # Hashes password before storying it into the database
@@ -309,16 +356,8 @@ def sell():
         # Call the lookup function to get the current information about the selected stock
         quote = lookup(request.form.get("symbol"))
 
-        # If the user doesn't select a number of shares to sell
-        if not request.form.get("shares"):
-            return apology("You must select a number of stocks to sell.")
-
         # Store shares quantity input in a variable
         shares = int(request.form.get("shares"))
-
-        # if the user gives a non positive number of shares
-        if shares <= 0:
-            return apology("You can't sell 0 or less stocks.")
 
         # Check how many of the selected stock the user has on his/her wallet
         stocks_amount = db.execute(
@@ -329,7 +368,8 @@ def sell():
 
         # If the user doesn't own the amount he wants to sell
         if stocks_amount[0]["total_shares"] < int(request.form.get("shares")):
-            return apology("You don't have the amount of shares that you want to sell.")
+            flash("You don't have the selected amount of shares to sell.")
+            return redirect("/sell")
 
         # User gave valid inputs
         else:
@@ -350,14 +390,20 @@ def sell():
                 session["user_id"],
                 request.form.get("symbol"),
             )
-            
+
             # Update the table "transactions"
             db.execute(
-                "INSERT INTO transactions UPDATE transactions SET shares = shares - ? WHERE user_id = ? AND symbol = ?",
-                shares,
+                "INSERT INTO transactions (user_id, symbol, shares, price_per_share, price, status, time) VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))",
                 session["user_id"],
                 request.form.get("symbol"),
+                "-" + str(shares),
+                quote["price"],
+                new_cash,
+                "SOLD",
             )
+
+            # Delete all the entrances on wallet where shares = 0 to keep table clean
+            db.execute("DELETE FROM wallet WHERE shares = 0")
 
             # Display a flash message that the user just sold
             flash("Sold!")
