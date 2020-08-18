@@ -12,7 +12,6 @@ $10.000,00 and it's up to him or her use that amount of money as they wish.
 
 ## About
 
-T
 
 The idea was to create a web application using the paradigm MVC 
 (Model View Controller) where the "Model" stands for the data of the 
