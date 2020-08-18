@@ -1,8 +1,14 @@
 # Bull Marker
 
-Bull Marker is a Stock Trading Game made using Python/Flask in the back-end, Jinja for the template engine, SQLite3 as DataBase and HTML/JS/CSS (Bootstrap) for the front-end.
+Bull Marker is a Stock Trading Game made using Python/Flask in the 
+back-end, Jinja for the template engine, SQLite3 as DataBase and 
+HTML/JS/CSS (Bootstrap) for the front-end.
 
-The web application provides registration/login for users and real time stock prices using IEX API. You can buy and sell stocks in real time and follow the up and down of the prices. Every user starts with $10.000,00 and it's up to him or her use that amount of money as they wish.
+
+
+
+The web application provides registration/login for users and real-time stock prices using IEX API. You can buy and sell stocks in real-time and follow the up and down of the prices. Every user starts with 
+$10.000,00 and it's up to him or her use that amount of money as they wish.
 
 ## About
 
