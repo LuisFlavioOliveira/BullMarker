@@ -1,6 +1,6 @@
-# Bull Marker
+# Bull Market
 
-Bull Marker is a Stock Trading Game made using Python/Flask in the 
+Bull Market is a Stock Trading Game made using Python/Flask in the 
 back-end, Jinja for the template engine, SQLite3 as DataBase and 
 HTML/JS/CSS (Bootstrap) for the front-end.
 
