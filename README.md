@@ -53,6 +53,10 @@ Finally, the "Controller" is represented by the application.py, it's the logic t
 ![Quote](https://github.com/LuisFlavioOliveira/BullMarker/blob/master/Screenshots/Quote.png)
 ![Transactions](https://github.com/LuisFlavioOliveira/BullMarker/blob/master/Screenshots/Transactions.png)
 
+## Video Presentation
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/ubRHWM6L_eQ/0.jpg)](https://youtu.be/ubRHWM6L_eQ "Freedom Market")
+
+
 ## Getting Started
 
 These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. 
